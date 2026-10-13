@@ -1,89 +1,159 @@
-// Interfaz del sitio. No necesitas modificar este archivo para las misiones,
-// pero léelo: así se conecta la lógica (misiones.js) con la pantalla.
-import { config } from './config.js'
-import { pedidos as datosIniciales, ESTADOS } from './datos.js'
-import { correrMisiones, mostrar } from './verificacion.js'
-import * as m from './misiones.js'
+// ============================================================================
+//   MISIONES — Sistema de Pedidos y Clientes · Informática III (Grupo 1301)
+// ============================================================================
+//   Este es el ÚNICO archivo de lógica que vas a modificar.
+// ============================================================================
 
-const $ = (sel) => document.querySelector(sel)
-const pedidos = structuredClone(datosIniciales)
-const resultados = correrMisiones()
-const lista = (n) => resultados.find((r) => r.numero === n).completa
-const seguro = (fn, respaldo) => { try { return fn() } catch { return respaldo } }
-const etiquetas = { registrado: 'Registrado', en_preparacion: 'En preparación', listo: 'Listo', entregado: 'Entregado' }
-const colores = { registrado: 'bg-slate-200 text-slate-800', en_preparacion: 'bg-amber-100 text-amber-900', listo: 'bg-sky-100 text-sky-900', entregado: 'bg-emerald-100 text-emerald-900' }
-const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-const dinero = (n) => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
+import { ESTADOS } from './datos.js'
 
-// Encabezado
-$('#negocio').textContent = config.negocio
-$('#autor').textContent = `${config.nombre} · @${config.usuarioGitHub} · ${config.equipo}`
-$('#marcador').textContent = `${resultados.filter((r) => r.completa).length}/6`
-$('#version').textContent = `Versión desplegada: ${new Date(__BUILD_TIME__).toLocaleString('es-MX')}`
-document.title = `${config.negocio} · Pedidos`
+// ----------------------------------------------------------------------------
+// MISIÓN 1 · RF3 — ¿Cuánto paga el cliente?
+// ----------------------------------------------------------------------------
+export function totalPedido(pedido) {
+  if (!pedido || !pedido.items || pedido.items.length === 0) {
+    return 0;
+  }
 
-// Panel de verificación
-$('#panel').innerHTML = resultados.map((r) => {
-  const ok = r.resultados.filter((x) => x.paso).length
-  const falla = r.resultados.find((x) => !x.paso)
-  return `<article class="min-w-0 rounded-lg border bg-white p-3 ${r.completa ? 'border-emerald-300' : 'border-rose-200'}">
-    <div class="flex items-center justify-between gap-2">
-      <h3 class="font-semibold">${r.completa ? '✅' : '❌'} Misión ${r.numero} · ${r.titulo}</h3>
-      <span class="text-xs rounded-full px-2 py-0.5 ${r.completa ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">${ok}/${r.resultados.length}</span>
-    </div>
-    <p class="text-xs text-slate-500">${r.requisito} · <code>${r.funcion}()</code></p>
-    ${falla ? `<dl class="mt-2 text-xs grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 bg-rose-50 rounded p-2">
-      <dt class="font-semibold">Caso</dt><dd class="min-w-0 break-all">${esc(falla.nombre)}</dd>
-      <dt class="font-semibold">Esperado</dt><dd class="min-w-0 break-all"><code>${esc(mostrar(falla.esperado))}</code></dd>
-      <dt class="font-semibold">Obtenido</dt><dd class="min-w-0 break-all"><code>${esc(falla.error ? 'Error: ' + falla.error : mostrar(falla.obtenido))}</code></dd>
-    </dl>` : ''}
-  </article>`
-}).join('')
+  // Multiplicamos por 100 para trabajar con centavos enteros y evitar el error 0.1 + 0.2
+  let subtotalCentavos = pedido.items.reduce((acc, item) => {
+    return acc + Math.round((item.cantidad * item.precioUnitario) * 100);
+  }, 0);
 
-// Sistema en vivo
-function render() {
-  const texto = $('#buscar').value
-  const visibles = lista(5) ? seguro(() => m.buscarPedidos(pedidos, texto), pedidos) : pedidos
+  const descuento = typeof pedido.descuento === 'number' ? pedido.descuento : 0;
+  let totalCentavos = subtotalCentavos * (1 - descuento);
 
-  const resumen = lista(4) ? seguro(() => m.resumenPorEstado(pedidos), null) : null
-  $('#resumen').innerHTML = ESTADOS.map((e) => `<div class="rounded-lg p-3 ${colores[e]}">
-    <p class="text-xs">${etiquetas[e]}</p><p class="text-2xl font-bold">${resumen ? resumen[e] : '—'}</p></div>`).join('')
-
-  $('#tabla').innerHTML = visibles.map((p) => {
-    const idx = ESTADOS.indexOf(p.estado)
-    const siguiente = ESTADOS[idx + 1]
-    const total = lista(1) ? dinero(seguro(() => m.totalPedido(p), 0)) : '—'
-    return `<tr class="border-t border-slate-100">
-      <td class="p-2 text-slate-500">${p.id}</td>
-      <td class="p-2">${esc(p.cliente)}</td>
-      <td class="p-2"><span class="rounded-full px-2 py-0.5 text-xs ${colores[p.estado]}">${etiquetas[p.estado]}</span></td>
-      <td class="p-2 text-right tabular-nums">${total}</td>
-      <td class="p-2 text-right">${siguiente ? `<button data-id="${p.id}" data-a="${siguiente}" class="text-xs rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-50">→ ${etiquetas[siguiente]}</button>` : ''}
-        <button data-id="${p.id}" data-a="registrado" class="text-xs text-slate-400 underline ml-1" title="Prueba un cambio inválido">reiniciar</button></td>
-    </tr>`
-  }).join('') || '<tr><td colspan="5" class="p-4 text-center text-slate-500">Sin resultados</td></tr>'
-
-  const top = lista(6) ? seguro(() => m.topClientes(pedidos, 3), []) : []
-  $('#top').innerHTML = top.length
-    ? top.map((c) => `<li>${esc(c.cliente)} — <b>${dinero(c.total)}</b></li>`).join('')
-    : '<li class="list-none text-slate-500">Completa la Misión 6 para ver el ranking.</li>'
+  return Math.round(totalCentavos) / 100;
 }
 
-$('#buscar').addEventListener('input', render)
-$('#tabla').addEventListener('click', (ev) => {
-  const b = ev.target.closest('button'); if (!b) return
-  const p = pedidos.find((x) => x.id === Number(b.dataset.id))
-  const valido = seguro(() => m.puedeTransicionar(p.estado, b.dataset.a), false)
-  if (valido) { p.estado = b.dataset.a; $('#aviso').textContent = '' }
-  else $('#aviso').textContent = `Tu función rechazó ${p.estado} → ${b.dataset.a} en el pedido ${p.id}.`
-  render()
-})
-$('#form-cliente').addEventListener('submit', (ev) => {
-  ev.preventDefault()
-  const datos = Object.fromEntries(new FormData(ev.target))
-  const errores = lista(3) ? seguro(() => m.validarCliente(datos), ['error_en_funcion']) : ['completa_la_mision_3']
-  $('#errores').innerHTML = errores.length
-    ? errores.map((e) => `<li class="text-rose-700">• ${esc(e)}</li>`).join('')
-    : '<li class="text-emerald-700">✓ Cliente válido</li>'
-})
-render()
+// ----------------------------------------------------------------------------
+// MISIÓN 2 · RF4 — ¿Este cambio de estado es válido?
+// ----------------------------------------------------------------------------
+export function puedeTransicionar(actual, nuevo) {
+  if (!actual || !nuevo) return false;
+  
+  const indexActual = ESTADOS.indexOf(actual);
+  const indexNuevo = ESTADOS.indexOf(nuevo);
+
+  // Si no existen en el arreglo, o no avanzan estrictamente un solo paso
+  if (indexActual === -1 || indexNuevo === -1) return false;
+
+  return indexNuevo === indexActual + 1;
+}
+
+// ----------------------------------------------------------------------------
+// MISIÓN 3 · RF1 — ¿Los datos del cliente son válidos?
+// ----------------------------------------------------------------------------
+export function validarCliente(cliente) {
+  const errores = [];
+  const datos = cliente || {};
+
+  // 1. Nombre requerido (no vacío o solo espacios)
+  const nombreLimpio = (datos.nombre || '').trim();
+  if (nombreLimpio === '') {
+    errores.push('nombre_requerido');
+  }
+
+  // 2. Teléfono: exactamente 10 dígitos tras quitar espacios y guiones
+  const telefonoBruto = datos.telefono || '';
+  const telefonoLimpio = telefonoBruto.replace(/[\s-]/g, '');
+  if (!/^\d{10}$/.test(telefonoLimpio)) {
+    errores.push('telefono_invalido');
+  }
+
+  // 3. Email opcional, pero si viene debe tener formato válido algo@algo.algo
+  const emailLimpio = (datos.email || '').trim();
+  if (emailLimpio !== '') {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailLimpio)) {
+      errores.push('email_invalido');
+    }
+  }
+
+  return errores;
+}
+
+// ----------------------------------------------------------------------------
+// MISIÓN 4 · RF5 — ¿Cuántos pedidos hay en cada estado?
+// ----------------------------------------------------------------------------
+export function resumenPorEstado(pedidos) {
+  const resumen = {};
+  
+  // Inicializamos todos los estados en 0
+  ESTADOS.forEach(estado => {
+    resumen[estado] = 0;
+  });
+
+  if (!Array.isArray(pedidos)) return resumen;
+
+  pedidos.forEach(pedido => {
+    if (pedido && resumen.hasOwnProperty(pedido.estado)) {
+      resumen[pedido.estado]++;
+    }
+  });
+
+  return resumen;
+}
+
+// ----------------------------------------------------------------------------
+// MISIÓN 5 · RF5 — Buscar pedidos por nombre de cliente
+// ----------------------------------------------------------------------------
+export function buscarPedidos(pedidos, texto) {
+  if (!Array.isArray(pedidos)) return [];
+  
+  const textoBusqueda = (texto || '').trim();
+  if (textoBusqueda === '') {
+    return pedidos;
+  }
+
+  // Función para normalizar texto (minúsculas y sin acentos mediante NFD)
+  const normalizar = (str) => {
+    return (str || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  };
+
+  const textoNormalizado = normalizar(textoBusqueda);
+
+  return pedidos.filter(pedido => {
+    if (!pedido || !pedido.cliente) return false;
+    return normalizar(pedido.cliente).includes(textoNormalizado);
+  });
+}
+
+// ----------------------------------------------------------------------------
+// MISIÓN 6 · DESTACADO — Los mejores clientes
+// ----------------------------------------------------------------------------
+export function topClientes(pedidos, n) {
+  if (!Array.isArray(pedidos) || typeof n !== 'number' || n <= 0) return [];
+
+  const acumulador = {};
+
+  // Acumulamos el gasto reutilizando totalPedido
+  pedidos.forEach(pedido => {
+    if (!pedido || !pedido.cliente) return;
+    const cliente = pedido.cliente;
+    const monto = totalPedido(pedido);
+
+    if (!acumulador[cliente]) {
+      acumulador[cliente] = 0;
+    }
+    acumulador[cliente] += monto;
+  });
+
+  // Convertimos a arreglo y aseguramos redondear los totales
+  const listaClientes = Object.entries(acumulador).map(([cliente, total]) => ({
+    cliente,
+    total: Math.round(total * 100) / 100
+  }));
+
+  // Ordenamos de mayor a menor total; en empate, por orden alfabético
+  listaClientes.sort((a, b) => {
+    if (b.total !== a.total) {
+      return b.total - a.total;
+    }
+    return a.cliente.localeCompare(b.cliente);
+  });
+
+  return listaClientes.slice(0, n);
+}

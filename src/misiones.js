@@ -1,16 +1,5 @@
 // ============================================================================
-//  MISIONES — Sistema de Pedidos y Clientes · Informática III (Grupo 1301)
-// ============================================================================
-//  Este es el ÚNICO archivo de lógica que vas a modificar.
-//
-//  Cada función está "vacía" a propósito. Tu sitio publicado en Vercel tiene un
-//  panel de verificación que corre casos de prueba contra estas funciones y te
-//  dice cuál falla, qué esperaba y qué obtuvo. Lee el caso que falla ANTES de
-//  cambiar código: así se trabaja con pruebas unitarias (lo verás en 3.4).
-//
-//  Puedes verificar sin publicar con:  npm run verificar
-//
-//  Orden recomendado: 1 → 2 → 3 → 4 → 5. La 6 es para Destacado.
+//   MISIONES — Sistema de Pedidos y Clientes · Informática III (Grupo 1301)
 // ============================================================================
 
 import { ESTADOS } from './datos.js'
@@ -18,75 +7,157 @@ import { ESTADOS } from './datos.js'
 // ----------------------------------------------------------------------------
 // MISIÓN 1 · RF3 — ¿Cuánto paga el cliente?
 // ----------------------------------------------------------------------------
-// Recibe un pedido: { items: [{ cantidad, precioUnitario }], descuento }
-//   - subtotal = suma de (cantidad × precioUnitario) de cada item
-//   - descuento es una fracción (0.1 = 10 %). Si no viene, es 0.
-//   - total = subtotal × (1 − descuento), REDONDEADO a 2 decimales.
-//   - Un pedido sin items cuesta 0.
-// Pista: prueba en la consola 0.1 + 0.2 y verás por qué hay que redondear.
-//        Math.round(x * 100) / 100
 export function totalPedido(pedido) {
-  return 0 // TODO
+  if (!pedido || !pedido.items || pedido.items.length === 0) {
+    return 0;
+  }
+
+  // Calculamos el subtotal sumando (cantidad * precioUnitario) de cada item
+  // Multiplicamos por 100 y usamos Math.round para evitar problemas de punto flotante
+  let subtotalCentavos = pedido.items.reduce((acc, item) => {
+    return acc + Math.round((item.cantidad * item.precioUnitario) * 100);
+  }, 0);
+
+  const descuento = typeof pedido.descuento === 'number' ? pedido.descuento : 0;
+  let totalCentavos = subtotalCentavos * (1 - descuento);
+
+  return Math.round(totalCentavos) / 100;
 }
 
 // ----------------------------------------------------------------------------
 // MISIÓN 2 · RF4 — ¿Este cambio de estado es válido?
 // ----------------------------------------------------------------------------
-// Los estados avanzan en orden y SOLO un paso a la vez:
-//   registrado → en_preparacion → listo → entregado
-// Devuelve true únicamente si `nuevo` es el estado inmediatamente siguiente
-// de `actual`. Saltar pasos, regresar o moverse desde "entregado" es false.
-// Un estado que no existe también es false.
-// Pista: ESTADOS ya es un arreglo ordenado. ¿Qué te dice indexOf?
 export function puedeTransicionar(actual, nuevo) {
-  return true // TODO: hoy acepta cualquier cosa. ¿Qué tan grave sería eso en producción?
+  if (!actual || !nuevo) return false;
+  
+  const indexActual = ESTADOS.indexOf(actual);
+  const indexNuevo = ESTADOS.indexOf(nuevo);
+
+  // Si alguno no existe en el arreglo ESTADOS, o si intentamos quedarnos en el mismo, o regresar
+  if (indexActual === -1 || indexNuevo === -1) return false;
+
+  // Debe avanzar estrictamente un solo paso a la vez
+  return indexNuevo === indexActual + 1;
 }
 
 // ----------------------------------------------------------------------------
 // MISIÓN 3 · RF1 — ¿Los datos del cliente son válidos?
 // ----------------------------------------------------------------------------
-// Recibe { nombre, telefono, email } y devuelve un ARREGLO con los códigos de
-// error que apliquen, en este orden. Si todo está bien, devuelve [].
-//   'nombre_requerido'  → nombre vacío o solo espacios
-//   'telefono_invalido' → después de quitar espacios y guiones, no son
-//                         exactamente 10 dígitos
-//   'email_invalido'    → el email VIENE (no está vacío) y no tiene forma de
-//                         correo: algo@algo.algo   (el email es opcional)
-// Pista: '55 1234-5678'.replace(/[\s-]/g, '')   y   /^\d{10}$/.test(...)
 export function validarCliente(cliente) {
-  return [] // TODO
+  const errores = [];
+  const clienteData = cliente || {};
+
+  // 1. Validar nombre: requerido, no vacío o solo espacios
+  const nombreLimpio = (clienteData.nombre || '').trim();
+  if (nombreLimpio === '') {
+    errores.push('nombre_requerido');
+  }
+
+  // 2. Validar teléfono: después de quitar espacios y guiones, deben ser exactamente 10 dígitos
+  const telefonoBruto = clienteData.telefono || '';
+  const telefonoLimpio = telefonoBruto.replace(/[\s-]/g, '');
+  if (!/^\d{10}$/.test(telefonoLimpio)) {
+    errores.push('telefono_invalido');
+  }
+
+  // 3. Validar email: si viene (no está vacío), debe cumplir con el formato algo@algo.algo
+  const emailLimpio = (clienteData.email || '').trim();
+  if (emailLimpio !== '') {
+    // Expresión regular estándar y robusta para validar correos
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailLimpio)) {
+      errores.push('email_invalido');
+    }
+  }
+
+  return errores;
 }
 
 // ----------------------------------------------------------------------------
 // MISIÓN 4 · RF5 — ¿Cuántos pedidos hay en cada estado?
 // ----------------------------------------------------------------------------
-// Devuelve un objeto con TODOS los estados como llave, aunque tengan 0:
-//   { registrado: 3, en_preparacion: 3, listo: 2, entregado: 2 }
-// Con una lista vacía, todos van en 0.
 export function resumenPorEstado(pedidos) {
-  return {} // TODO
+  const resumen = {};
+  
+  // Inicializamos todos los estados posibles en 0
+  ESTADOS.forEach(estado => {
+    resumen[estado] = 0;
+  });
+
+  if (!Array.isArray(pedidos)) return resumen;
+
+  // Incrementamos el contador por cada pedido según su estado actual
+  pedidos.forEach(pedido => {
+    if (pedido && resumen.hasOwnProperty(pedido.estado)) {
+      resumen[pedido.estado]++;
+    }
+  });
+
+  return resumen;
 }
 
 // ----------------------------------------------------------------------------
 // MISIÓN 5 · RF5 — Buscar pedidos por nombre de cliente
 // ----------------------------------------------------------------------------
-// Devuelve los pedidos cuyo cliente CONTIENE el texto buscado, sin importar
-// mayúsculas ni acentos: "ramirez" encuentra a "Ana Ramírez" y "JOSÉ" a
-// "José Martínez". Un texto vacío (o solo espacios) devuelve todos.
-// Pista: 'Ramírez'.normalize('NFD').replace(/[̀-ͯ]/g, '')
-//        Investiga qué hace NFD. Es un problema real en sistemas en español.
 export function buscarPedidos(pedidos, texto) {
-  return [] // TODO
+  if (!Array.isArray(pedidos)) return [];
+  
+  const textoBusqueda = (texto || '').trim();
+  if (textoBusqueda === '') {
+    return pedidos;
+  }
+
+  // Función auxiliar para normalizar cadenas (minúsculas y sin acentos)
+  const normalizar = (str) => {
+    return (str || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  };
+
+  const textoNormalizado = normalizar(textoBusqueda);
+
+  return pedidos.filter(pedido => {
+    if (!pedido || !pedido.cliente) return false;
+    const clienteNormalizado = normalizar(pedido.cliente);
+    return clienteNormalizado.includes(textoNormalizado);
+  });
 }
 
 // ----------------------------------------------------------------------------
 // MISIÓN 6 · DESTACADO — Los mejores clientes
 // ----------------------------------------------------------------------------
-// Devuelve los `n` clientes que más han gastado, sumando el total de TODOS sus
-// pedidos (reutiliza totalPedido, no copies la lógica).
-// Formato: [{ cliente: 'Ana Ramírez', total: 1316 }, ...]
-// Orden: total de mayor a menor; si empatan, por nombre alfabético.
-// Pista: un objeto acumulador, luego Object.entries, map y sort.
 export function topClientes(pedidos, n) {
-  return [] // TODO
+  if (!Array.isArray(pedidos) || typeof n !== 'number' || n <= 0) return [];
+
+  const acumulador = {};
+
+  // Acumulamos el gasto total por cada cliente reutilizando totalPedido
+  pedidos.forEach(pedido => {
+    if (!pedido || !pedido.cliente) return;
+    const nombreCliente = pedido.cliente;
+    const monto = totalPedido(pedido);
+
+    if (!acumulador[nombreCliente]) {
+      acumulador[nombreCliente] = 0;
+    }
+    acumulador[nombreCliente] += monto;
+  });
+
+  // Convertimos el objeto acumulador en un arreglo de objetos y redondeamos los totales a 2 decimales
+  const listaClientes = Object.entries(acumulador).map(([cliente, total]) => ({
+    cliente,
+    total: Math.round(total * 100) / 100
+  }));
+
+  // Ordenamos: primero de mayor a menor total; en caso de empate, alfabéticamente por nombre
+  listaClientes.sort((a, b) => {
+    if (b.total !== a.total) {
+      return b.total - a.total; // Mayor a menor gasto
+    }
+    return a.cliente.localeCompare(b.cliente); // Alfabético en caso de empate
+  });
+
+  // Devolvemos únicamente los primeros `n` elementos
+  return listaClientes.slice(0, n);
 }
